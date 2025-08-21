@@ -27,7 +27,7 @@ UI는 *데모/검증용* Streamlit이며, **모델·검색·추론 계층**이 �
 - **자연어 + 키워드 혼합 질의** → **표준 키워드 정규화** → 의미 기반 검색
 - **Retriever → (옵션) Re‑rank → LLM 요약**: 근거 포함 결과 생성
 - **Conversation Memory**: `ConversationBufferMemory`로 최근 맥락 유지
-- **Tavily(옵션)**: 최신 외부 사실 보강(필요 시만 on)
+- **Tavily(옵션)**: 최신 외부 사실 보강(필요 시만 on, 실패시 **graceful degrade**)
 
 ---
 
@@ -107,19 +107,19 @@ UI는 *데모/검증용* Streamlit이며, **모델·검색·추론 계층**이 �
 - **LLM Summarizer**: 근거 포함 요약/추천 사유 생성
 - **Memory**: `ConversationBufferMemory`로 **히스토리(k=4)** 유지
 
-### 코드 스케치
+### 코드 스케치 (요지)
 ```python
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain.memory import ConversationBufferMemory
-from sentence_transformers import CrossEncoder
+# (옵션) from sentence_transformers import CrossEncoder
 
 emb = HuggingFaceEmbeddings(model_name="jhgan/ko-sroberta-multitask")
 vs = FAISS.from_texts(texts, emb)
 retriever = vs.as_retriever(search_kwargs={"k": 12})
 
 memory = ConversationBufferMemory(k=4, return_messages=True)
-# (옵션) CrossEncoder 리랭커 적용 → 상위 N만 컨텍스트
+# USE_RERANKER=true 일 때 CrossEncoder로 상위 후보 재정렬 → 상위 N만 컨텍스트
 ```
 
 ### History(대화 히스토리) 규칙
@@ -143,8 +143,9 @@ memory = ConversationBufferMemory(k=4, return_messages=True)
 
 ---
 
-## 📂 Repository Structure (실제 파일 기준)
+## 📂 Repository Structure (실제 형태 예시)
 ```
+.
 ├─ data/
 │  └─ card_llm_ready.json
 ├─ tools/
@@ -165,7 +166,7 @@ memory = ConversationBufferMemory(k=4, return_messages=True)
 ```bash
 python -m venv .venv && source .venv/bin/activate   # Windows: .\.venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.sample .env   # TAVILY_API_KEY / LLM_MODEL / CARD_DATA 설정
+cp .env.sample .env   # TAVILY_API_KEY / LLM_MODEL / CARD_DATA / USE_RERANKER 설정
 ```
 
 > **데이터 경로 권장 패치**
@@ -189,13 +190,19 @@ streamlit run streamlit_web.py
 ---
 
 ## 🔌 Config
-| Key              | Default                    | Description                  |
-|------------------|----------------------------|------------------------------|
-| `CARD_DATA`      | `data/card_llm_ready.json` | 카드 혜택 JSON 경로          |
-| `TAVILY_API_KEY` | *(empty)*                  | (옵션) 웹 검색 기능 키       |
-| `LLM_MODEL`      | `mistral:latest`           | Ollama/HF 모델명(옵션)       |
+| Key                 | Default                          | Description                         |
+|---------------------|----------------------------------|-------------------------------------|
+| `CARD_DATA`         | `data/card_llm_ready.json`       | 카드 혜택 JSON 경로                 |
+| `EMBEDDING_MODEL`   | `jhgan/ko-sroberta-multitask`    | HuggingFace 임베딩 모델             |
+| `USE_RERANKER`      | `false`                           | `true` 시 CrossEncoder 리랭커 활성  |
+| `CROSS_ENCODER_MODEL`| `cross-encoder/ms-marco-MiniLM-L-6-v2` |(옵션) 리랭커 모델            |
+| `RETRIEVER_TOPK`    | `12`                              | 초기 검색 상위 K                    |
+| `RERANK_TOPK`       | `5`                               | 리랭크 후 상위 N                    |
+| `RERANK_ALPHA`      | `0.4`                             | (선택) 점수 융합 가중치             |
+| `LLM_MODEL`         | `mistral:latest`                 | Ollama/HF 모델명                    |
+| `TAVILY_API_KEY`    | *(empty)*                        | (옵션) 웹 검색 기능 키              |
 
-> 비밀키/환경설정은 `.env`에서 관리하세요(커밋 금지).
+> **동의어 매핑(선택)**: `data/synonyms.yaml` — 예) `지하철/버스/대중교통→교통`, `GS25/CU→편의점` (사전 부재 시 **패스스루**).
 
 ---
 
@@ -218,16 +225,18 @@ streamlit run streamlit_web.py
 ## 📈 Business Impact & Metrics
 | Metric | 정의 | 측정 방법 |
 |---|---|---|
-| **Top‑3 Hit@K** | 추천 Top‑3 중 사용자 선택 카드 포함 비율 | UI 선택 로그/이벤트로 히트율 산출 |
-| **Time‑to‑Answer** | 질의→결과 렌더까지 응답 시간(ms) | 요청/응답 타이머 |
+| **Top‑3 Hit@K** | 추천 Top‑3 중 사용자 선택 카드 포함 비율 | UI 선택 로그/이벤트로 산출 |
+| **Time‑to‑Answer(E2E)** | 질의 수신 ~ 화면 렌더까지 | 요청/응답 타이머 |
 | **Explainability CTR** | “추천 근거 펼침” 클릭률 | 근거 섹션 토글 이벤트 |
+
+**로그 권장**: `query`, `normalized_keywords`, `topk_ids`, `rerank_scores`, `final_context_ids`, `json_valid`, `latency_ms` (PII 저장 금지)
 
 ---
 
 ## 🔐 Security & Privacy
 - **비저장 모드 기본값**: 사용자 질의/응답 **서버 저장 없음**(옵션: 익명 통계만)
 - **비밀키 관리**: `.env` 환경변수, 저장소 커밋 금지
-- **외부 호출 제어**: 기본 **로컬‑온리**, Tavily는 **옵션** 플래그
+- **외부 호출 제어**: 기본 **로컬‑온리**, Tavily 실패 시에도 **핵심 기능 유지**
 
 ---
 
@@ -257,6 +266,26 @@ streamlit run streamlit_web.py
 ## 🐳 Docker (옵션)
 ```bash
 docker build -t card-chatbot .
-docker run -it --rm -p 8501:8501   -e CARD_DATA=data/card_llm_ready.json   --name card-bot card-chatbot
+docker run -it --rm -p 8501:8501 \
+  -e CARD_DATA=data/card_llm_ready.json \
+  --name card-bot card-chatbot
 # http://localhost:8501
 ```
+
+---
+
+## 📦 Requirements (권장 버전 핀)
+```
+langchain>=0.2,<0.3
+langchain-community>=0.2,<0.3
+langchain-huggingface>=0.0.3
+faiss-cpu>=1.8.0
+sentence-transformers>=2.6
+transformers>=4.41
+streamlit>=1.35
+tavily-python>=0.3
+selenium>=4.20
+webdriver-manager>=4.0
+```
+
+---
