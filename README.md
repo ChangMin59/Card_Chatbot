@@ -27,6 +27,93 @@
 
 ---
 
+## 🧱 Prompt Engineering
+
+### 1) 역할·출력 포맷(시스템 프롬프트)
+모델을 **신용카드 혜택 전문가**로 역할 고정하고, 출력 포맷을 **JSON 스키마**로 고정합니다.
+```text
+You are a credit-card benefit expert. Answer concisely with evidence.
+Rules:
+- Return JSON with fields: intent, reasons[], suggestions[]
+- Show matched keywords and short evidence snippets when possible
+- If uncertain, ask for one clarifying preference
+```
+
+### 2) 카테고리 라우팅(추천/비교/Q&A/기타)
+질의를 4유형으로 분류하여 **각기 다른 체인**으로 라우팅합니다.
+```text
+[intents] = { "recommend", "compare", "benefit_qa", "other" }
+Choose the most specific intent. Prefer NOT "other" if any card-benefit intent fits.
+```
+- **Few‑shot 예시**를 각 intent에 1~2개 포함하여 경계 사례(예: Q&A↔기타 혼동)를 줄입니다.
+
+### 3) 근거 중심 요약 프롬프트
+검색 결과(카드 혜택 설명)에서 **증거 문장**을 추출해 2~3줄 요약으로 정리합니다.
+```text
+Summarize top benefits in 2-3 bullet lines. Cite which keywords matched: ["교통","편의점",...]
+```
+
+---
+
+## 🧩 LangChain Orchestration
+
+### 체인 토폴로지
+- **Embedding → FAISS**: `혜택 설명`을 단락으로 분할 후 임베딩 저장
+- **Retriever**: 질의(정규화된 키워드 포함)를 인코딩 → 유사도 Top‑K 문서 반환
+- **(옵션) Re‑rank**: CrossEncoder로 상위 후보 재정렬
+- **LLM Summarizer**: 근거 포함 요약/추천 사유 생성
+- **Memory**: `ConversationBufferMemory`로 최근 대화를 **히스토리**로 유지
+
+### 예시 코드 스케치
+```python
+from langchain.vectorstores import FAISS
+from langchain.embeddings import HuggingFaceEmbeddings
+from langchain.memory import ConversationBufferMemory
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import RunnableParallel, RunnablePassthrough
+
+emb = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+vs = FAISS.from_texts(texts, emb)
+
+retriever = vs.as_retriever(search_kwargs={"k": 8})
+memory = ConversationBufferMemory(k=4, return_messages=True)
+
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a credit-card benefit expert..."),
+    ("human", "{question}")
+])
+
+def re_rank(docs):  # optional CrossEncoder
+    return docs  # placeholder
+
+chain = (
+    {"docs": retriever | re_rank, "question": RunnablePassthrough()}
+    | prompt
+    # | 모델 호출 (Ollama/HF)
+)
+```
+
+### History(대화 히스토리)
+- 최근 **k=4 turns** 유지(토큰 초과 방지), 필요 시 요약 압축.
+- 히스토리는 **의도/선호 유지**에만 사용, 응답 본문 근거는 **검색 결과**에서만 추출.
+
+---
+
+## 🌐 Tavily Web Search (옵션)
+외부 최신 정보가 필요한 비교/이슈성 질의에만 사용합니다.
+- **키**: `TAVILY_API_KEY` (환경변수)
+- **모드**: 일반/뉴스/이미지, 안전·도메인 필터링 옵션
+- **온오프**: `.env`로 끄고 켤 수 있게 설계
+- **머지**: 검색 결과 요약을 **근거 블록**에 병합하여 표기
+
+```python
+from tavily import TavilyClient
+tc = TavilyClient(api_key=os.getenv("TAVILY_API_KEY", ""))
+resp = tc.search(query, search_depth="advanced", max_results=5)
+```
+
+---
+
 ## 🏗 Architecture
 ```text
 [Browser/Streamlit]
@@ -35,7 +122,9 @@
 [streamlit_web.py]  ──►  [main.py Orchestrator]
                           ├─ FAISS VectorStore (임베딩 검색)
                           ├─ (opt) CrossEncoder Re-ranker
-                          └─ (opt) Ollama/HF LLM (요약/정리)
+                          ├─ ConversationBufferMemory (History)
+                          ├─ (opt) Tavily Web Search
+                          └─ Ollama/HF LLM (요약/정리)
                               ▼
                         Ranked Results + Reasons
 ```
@@ -43,6 +132,7 @@
 ---
 
 ## 📂 Repository Structure
+아래 구조는 현재 레포의 실제 파일 기준입니다.
 ```
 .
 ├─ data/
@@ -65,7 +155,7 @@
 ```bash
 git clone https://github.com/<YOUR_ID>/card-chatbot.git
 cd card-chatbot
-python -m venv .venv && source .venv/bin/activate   # Windows: .\.venv\Scriptsctivate
+python -m venv .venv && source .venv/bin/activate   # Windows: .\.venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.sample .env   # 필요 시 TAVILY_API_KEY / LLM_MODEL / CARD_DATA 설정
 ```
@@ -130,13 +220,6 @@ def with_timer(fn):
 
 ---
 
-## 🧩 Primary Use Cases
-- **신규 발급 추천**: “대중교통·편의점 자주 이용 / 월 40만원” → Top‑N 후보 + 근거 제시
-- **보유 카드 최적화**: “통신/주유 위주로 바꿀 카드 제안”
-- **오퍼 탐색(Q&A)**: “해외 결제 수수료 낮은 카드 있어?”
-
----
-
 ## 🔐 Security & Privacy
 - **비저장 모드 기본값**: 사용자 질의/응답 **서버 저장 없음**(옵션으로 익명 통계만)
 - **비밀키 관리**: `.env` 환경변수, 저장소 커밋 금지
@@ -171,8 +254,13 @@ def with_timer(fn):
 ## 🐳 Docker (옵션)
 ```bash
 docker build -t card-chatbot .
-docker run -it --rm -p 8501:8501   -e CARD_DATA=data/card_llm_ready.json   --name card-bot card-chatbot
+docker run -it --rm -p 8501:8501 \
+  -e CARD_DATA=data/card_llm_ready.json \
+  --name card-bot card-chatbot
 # http://localhost:8501
 ```
 
 ---
+
+## License
+MIT (또는 내부 배포 정책에 맞춰 변경)
