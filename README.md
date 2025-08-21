@@ -4,6 +4,13 @@
 이 프로젝트의 핵심은 **LangChain 오케스트레이션 + RAG 파이프라인 + Prompt Engineering**입니다.  
 UI는 *데모/검증용* Streamlit이며, **모델·검색·추론 계층**이 진짜 가치입니다.
 
+<p align="left">
+  <img alt="LangChain" src="https://img.shields.io/badge/Orchestration-LangChain-informational">
+  <img alt="FAISS" src="https://img.shields.io/badge/Vector%20DB-FAISS-blue">
+  <img alt="Streamlit" src="https://img.shields.io/badge/UI-Streamlit-brightgreen">
+  <img alt="Ollama" src="https://img.shields.io/badge/LLM-Ollama%2FMistral-yellow">
+</p>
+
 ---
 
 ## 🧭 Executive Summary (for Stakeholders)
