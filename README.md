@@ -102,34 +102,17 @@ UI는 *데모/검증용* Streamlit이며, **모델·검색·추론 계층**이 �
 
 ### 코드 스케치
 ```python
-from langchain.vectorstores import FAISS
-from langchain.embeddings import HuggingFaceEmbeddings
+from langchain_community.vectorstores import FAISS
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain.memory import ConversationBufferMemory
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.runnables import RunnableParallel, RunnablePassthrough
+from sentence_transformers import CrossEncoder
 
-# 1) Vector Store
-emb = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+emb = HuggingFaceEmbeddings(model_name="jhgan/ko-sroberta-multitask")
 vs = FAISS.from_texts(texts, emb)
-retriever = vs.as_retriever(search_kwargs={"k": 8})
+retriever = vs.as_retriever(search_kwargs={"k": 12})
 
-# 2) Memory (history)
 memory = ConversationBufferMemory(k=4, return_messages=True)
-
-# 3) Prompt
-prompt = ChatPromptTemplate.from_messages([
-    ("system", "신용카드 혜택 전문가로서 JSON만 출력하라..."),
-    ("human", "{question}")
-])
-
-def re_rank(docs):  # optional (CrossEncoder)
-    return docs  # placeholder
-
-chain = (
-    {"docs": retriever | re_rank, "question": RunnablePassthrough()}
-    | prompt
-    # | 모델 호출 (Ollama/HF)
-)
+# (옵션) CrossEncoder 리랭커 적용 → 상위 N만 컨텍스트
 ```
 
 ### History(대화 히스토리) 규칙
@@ -153,33 +136,29 @@ chain = (
 
 ---
 
-## 📂 Repository Structure
-> 실제 레포 파일 기준
+## 📂 Repository Structure (실제 파일 기준)
 ```
-.
 ├─ data/
-│  └─ card_llm_ready.json        # 카드 혜택 JSON (UTF‑8)
+│  └─ card_llm_ready.json
 ├─ tools/
-│  └─ crawling.py                # 혜택 데이터 수집(옵션, Selenium)
-├─ main.py                       # LangChain: RAG/Rank/Memory/Prompt
-├─ streamlit_web.py              # UI Shell (체인 호출)
-├─ model.ipynb                   # (옵션) 실험/모델링 노트북
-├─ test.ipynb                    # (옵션) 테스트/데모 노트북
+│  └─ crawling.py
+├─ main.py
+├─ streamlit_web.py
+├─ model.ipynb
+├─ test.ipynb
 ├─ requirements.txt
-├─ .env.sample                   # TAVILY_API_KEY, LLM_MODEL, CARD_DATA 등
+├─ .env.sample
 ├─ .gitignore
-└─ Dockerfile                    # 컨테이너 실행(8501)
+└─ Dockerfile
 ```
 
 ---
 
 ## ⚙️ Setup
 ```bash
-git clone https://github.com/<YOUR_ID>/card-chatbot.git
-cd card-chatbot
 python -m venv .venv && source .venv/bin/activate   # Windows: .\.venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.sample .env   # 필요 시 TAVILY_API_KEY / LLM_MODEL / CARD_DATA 설정
+cp .env.sample .env   # TAVILY_API_KEY / LLM_MODEL / CARD_DATA 설정
 ```
 
 > **데이터 경로 권장 패치**
@@ -195,7 +174,7 @@ with open(DATA_PATH, "r", encoding="utf-8") as f:
 ## ▶️ Run (Demo UI)
 ```bash
 streamlit run streamlit_web.py
-# 브라우저: http://localhost:8501
+# http://localhost:8501
 ```
 - 선호 카테고리(예: 교통/통신/편의점) 입력 → **추천 결과 + 매칭 근거** 확인  
 - 체인은 **정규화 → Retrieval → (옵션) Re‑rank → 근거 포함 요약**을 수행합니다.
@@ -236,17 +215,6 @@ streamlit run streamlit_web.py
 | **Time‑to‑Answer** | 질의→결과 렌더까지 응답 시간(ms) | 요청/응답 타이머 |
 | **Explainability CTR** | “추천 근거 펼침” 클릭률 | 근거 섹션 토글 이벤트 |
 
-```python
-# (예시) metrics.py – 간단 로깅 훅
-from time import perf_counter
-def with_timer(fn):
-    def wrap(*a, **kw):
-        t0 = perf_counter(); r = fn(*a, **kw); dt = int((perf_counter()-t0)*1000)
-        print({"metric":"time_to_answer_ms","value":dt})
-        return r
-    return wrap
-```
-
 ---
 
 ## 🔐 Security & Privacy
@@ -282,10 +250,6 @@ def with_timer(fn):
 ## 🐳 Docker (옵션)
 ```bash
 docker build -t card-chatbot .
-docker run -it --rm -p 8501:8501 \
-  -e CARD_DATA=data/card_llm_ready.json \
-  --name card-bot card-chatbot
+docker run -it --rm -p 8501:8501   -e CARD_DATA=data/card_llm_ready.json   --name card-bot card-chatbot
 # http://localhost:8501
 ```
-
----
