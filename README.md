@@ -1,4 +1,4 @@
-# 💳 Card Benefits Chatbot — **LangChain · RAG · Prompt Engineering 중심**
+# 💳 Card Chatbot — **LangChain · RAG · Prompt Engineering 중심**
 
 **“카드 혜택을 RAG로 검색하고, 프롬프트로 의사결정을 구조화한다.”**  
 이 프로젝트의 핵심은 **LangChain 오케스트레이션 + RAG 파이프라인 + Prompt Engineering**입니다.  
