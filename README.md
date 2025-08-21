@@ -112,7 +112,7 @@ UI는 *데모/검증용* Streamlit이며, **모델·검색·추론 계층**이 �
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain.memory import ConversationBufferMemory
-# (옵션) from sentence_transformers import CrossEncoder
+from sentence_transformers import CrossEncoder
 
 emb = HuggingFaceEmbeddings(model_name="jhgan/ko-sroberta-multitask")
 vs = FAISS.from_texts(texts, emb)
