@@ -1,0 +1,21 @@
+# app
+streamlit>=1.32.0
+
+# langchain / embeddings / reranker
+langchain>=0.2.0
+langchain-core>=0.2.0
+langchain-community>=0.2.0
+langchain-huggingface>=0.0.7
+sentence-transformers>=2.6.1
+faiss-cpu>=1.8.0
+transformers>=4.41.0
+huggingface-hub>=0.23.0
+accelerate>=0.30.0
+tavily-python>=0.3.5
+
+# optional local LLM via Ollama (별도 설치 필요)
+# ollama (pip 패키지 아님, 시스템 설치)
+
+# crawling (optional)
+selenium>=4.20.0
+webdriver-manager>=4.0.1
