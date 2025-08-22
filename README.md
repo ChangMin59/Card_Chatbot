@@ -42,7 +42,7 @@ UI는 *데모/검증용* Streamlit이며, **모델·검색·추론 계층**이 �
 
 모델은 항상 **신용카드 혜택 전문가**로 동작하며, 아래 **일관된 JSON 스키마**를 출력합니다.
 
-```json
+```text
 {
   "intent": "recommend" | "compare" | "benefit_qa" | "web_or_other",
   "reasons": ["추천/판단 근거 1","추천/판단 근거 2"],
@@ -65,12 +65,12 @@ UI는 *데모/검증용* Streamlit이며, **모델·검색·추론 계층**이 �
 
 - **recommend**: 사용자의 소비 패턴/선호에 맞춘 카드 추천  
 - **compare**: 특정 카드 간 조건·혜택 비교  
-- **benefit_qa**: 혜택 규정·한도·제외 조건 등 정책성 질의응답 (정보 부족 시 추가 질문 포함)  
-- **web_or_other**: 외부 최신 정보 필요 or 카드 무관  
+- **benefit_qa**: 정보 부족시 역질문
+- **web_or_other**: 카드 무관 질문 웹 검색
 
 ### 규칙
 - 카드 혜택 관련이면 가급적 `"web_or_other"`은 피한다.  
-- `benefit_qa`는 정보 부족 시 → **결론 보류 + 추가 질문 포함**  
+- `benefit_qa`는 **역 질문**  
 - intent별 few-shot 예시를 내부적으로 학습시켜 경계 사례 혼동 최소화  
 
 출력 예시:
